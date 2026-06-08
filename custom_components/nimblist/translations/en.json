@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Nimblist",
+        "description": "Enter your Nimblist server URL and an API token. Create a token in the Nimblist web app under Settings → API tokens.",
+        "data": {
+          "base_url": "Server URL",
+          "api_token": "API token"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect to Nimblist",
+        "description": "Your API token is no longer valid. Enter a new one to reconnect.",
+        "data": {
+          "api_token": "API token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Nimblist server.",
+      "invalid_auth": "Invalid or revoked API token."
+    },
+    "abort": {
+      "already_configured": "This Nimblist account is already configured.",
+      "reauth_successful": "Reconnected successfully.",
+      "reauth_account_mismatch": "That API token belongs to a different Nimblist account. Use a token for the account you are reconnecting."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nimblist options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  }
+}

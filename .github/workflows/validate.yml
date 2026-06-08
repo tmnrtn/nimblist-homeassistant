@@ -1,0 +1,44 @@
+name: Validate
+
+# Runs in the public mirror repo (tmnrtn/nimblist-homeassistant). This file lives
+# under integrations/homeassistant/.github/ in the private monorepo so it is NOT
+# executed there (GitHub only runs workflows at the repo root) — it is mirrored to
+# the public repo's root by sync-homeassistant.yml.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+jobs:
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Brand assets (icon/logo) are submitted to home-assistant/brands
+          # separately; don't fail validation on their absence.
+          ignore: brands
+
+  tests:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements_test.txt
+      - run: pytest

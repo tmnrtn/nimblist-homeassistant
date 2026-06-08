@@ -1,0 +1,9 @@
+# Python / test artifacts for the Home Assistant integration
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
