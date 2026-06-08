@@ -1,39 +1,59 @@
 # Nimblist — Home Assistant integration
 
-Exposes your [Nimblist](https://nimblist.app) shopping lists as Home Assistant
-**`todo`** entities, so you can view and edit them from dashboards, automations,
+[![Validate](https://github.com/tmnrtn/nimblist-homeassistant/actions/workflows/validate.yml/badge.svg)](https://github.com/tmnrtn/nimblist-homeassistant/actions/workflows/validate.yml)
+[![hacs](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
+
+Expose your [Nimblist](https://nimblist.app) shopping lists as Home Assistant
+**`todo`** entities — view and edit them from dashboards, automations, scripts,
 and voice assistants (Assist / Alexa / Google via Home Assistant).
 
-> **Status: work in progress.** This is the scaffold (Phase 2 of `TRACKER.md`).
-> The API client, config flow, coordinator, and `todo` platform land in the
-> following phases.
+## Features
 
-## What it will do
+- Each (non-template) Nimblist shopping list becomes its own `todo` entity.
+- **Add, rename, check/uncheck, and delete** items — synced straight to Nimblist.
+- Item quantity maps to the to-do item's description.
+- Polls the Nimblist API (`cloud_polling`); the update interval is configurable.
+- Works against the hosted app **or a self-hosted instance** (the server URL is configurable).
 
-- Each (non-template) Nimblist shopping list becomes a `todo` entity.
-- Add items, rename them, check/uncheck, and delete — synced to Nimblist.
-- Polls the Nimblist API (`cloud_polling`); interval configurable.
+## Installation
 
-## Authentication
+### HACS (recommended)
 
-The integration authenticates with a **Nimblist API token** (sent as an
-`X-Api-Key` header), which you create in the Nimblist web app under
-**Settings → API tokens**. This works for every account type, including
-Google/Facebook/Microsoft sign-ins. No password is stored in Home Assistant.
+1. In Home Assistant, go to **HACS → ⋮ → Custom repositories**.
+2. Add `https://github.com/tmnrtn/nimblist-homeassistant` with category **Integration**.
+3. Install **Nimblist**, then **restart Home Assistant**.
 
-## Self-hosting
+### Manual
 
-The server URL is configurable, so self-hosted Nimblist instances are supported
-(default: `https://nimblist.app`).
+Copy `custom_components/nimblist/` into your Home Assistant `config/custom_components/`
+directory and restart Home Assistant.
+
+## Configuration
+
+1. First, create an API token: in the Nimblist web app go to **Settings → API tokens**,
+   create one, and copy it (it's shown only once). This works for **every** account type,
+   including Google/Facebook/Microsoft sign-ins — no password is stored in Home Assistant.
+2. In Home Assistant: **Settings → Devices & Services → Add Integration → Nimblist**.
+3. Enter your **server URL** (default `https://nimblist.app`; use your own URL if self-hosting)
+   and the **API token**.
+
+That's it — you'll get one `todo` entity per active shopping list. Options (cog → *Configure*)
+let you change the update interval. If a token is ever revoked, Home Assistant prompts you to
+re-authenticate with a new one.
 
 ## Development
 
 ```bash
-cd integrations/homeassistant
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements_test.txt
 pytest
 ```
 
-The component lives in `custom_components/nimblist/`. For HACS, this directory is
-mirrored to the public `nimblist-homeassistant` repository.
+The component lives in `custom_components/nimblist/`.
+
+> This repository is **published automatically** from the Nimblist monorepo; open issues
+> here, but code changes are made upstream.
+
+## License
+
+[MIT](LICENSE)
