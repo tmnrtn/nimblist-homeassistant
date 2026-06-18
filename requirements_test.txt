@@ -1,4 +1,4 @@
 # Test toolchain for the Nimblist Home Assistant integration.
 # pytest-homeassistant-custom-component pins a matching Home Assistant + pytest
 # stack and provides the `enable_custom_integrations` / `hass` fixtures.
-pytest-homeassistant-custom-component==0.13.316
+pytest-homeassistant-custom-component==0.13.339
