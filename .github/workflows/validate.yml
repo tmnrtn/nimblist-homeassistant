@@ -28,9 +28,10 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Brand assets (icon/logo) are submitted to home-assistant/brands
-          # separately; don't fail validation on their absence.
-          ignore: brands
+          # No `ignore: brands` — brand images ship in-repo under
+          # custom_components/nimblist/brand/ (HA brands proxy API), which the HACS
+          # action accepts in place of a home-assistant/brands entry. hacs/default
+          # inclusion requires a clean run without the ignore key.
 
   tests:
     name: pytest
