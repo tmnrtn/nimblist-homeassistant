@@ -1,4 +1,10 @@
 # Test toolchain for the Nimblist Home Assistant integration.
 # pytest-homeassistant-custom-component pins a matching Home Assistant + pytest
 # stack and provides the `enable_custom_integrations` / `hass` fixtures.
-pytest-homeassistant-custom-component==0.13.339
+#
+# Capped at 0.13.316: releases >=0.13.317 require Python >=3.14, but validate.yml
+# runs the test job on 3.13 (HA's current runtime floor), so newer pins fail to
+# resolve ("No matching distribution"). Raise this and the workflow python-version
+# together when HA moves its floor to 3.14. Dependabot bumped it to 0.13.339 in
+# #761, which is what reddened the public mirror's Validate CI.
+pytest-homeassistant-custom-component==0.13.316
