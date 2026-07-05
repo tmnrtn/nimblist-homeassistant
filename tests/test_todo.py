@@ -160,3 +160,15 @@ async def test_update_swallows_conflict(
         {ATTR_ENTITY_ID: ENTITY_ID, "item": "i1", "status": "completed"},
         blocking=True,
     )
+
+
+async def test_delete_swallows_missing_item(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    await _setup(hass, aioclient_mock)
+    # A concurrently-deleted item returns 404 → treated as an idempotent success, not an error (#1125).
+    aioclient_mock.delete(f"{BASE}/api/items/i2", status=404)
+
+    await hass.services.async_call(
+        "todo", "remove_item", {ATTR_ENTITY_ID: ENTITY_ID, "item": "i2"}, blocking=True
+    )

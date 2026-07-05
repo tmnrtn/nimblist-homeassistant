@@ -104,6 +104,34 @@ async def test_delete_item_succeeds_on_204(
     await _client(hass).async_delete_item("i1")  # no exception
 
 
+async def test_delete_item_raises_gone_on_404(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A concurrently-deleted item returns 404; the client treats a write-to-missing as "gone"
+    # (idempotent), not a transport failure (#1125).
+    aioclient_mock.delete(f"{BASE}/api/items/i1", status=404)
+    with pytest.raises(NimblistItemGoneError):
+        await _client(hass).async_delete_item("i1")
+
+
+async def test_update_item_raises_gone_on_404(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.put(f"{BASE}/api/items/i1", status=404)
+    item = {"id": "i1", "name": "Milk", "isChecked": True, "shoppingListId": "l1"}
+    with pytest.raises(NimblistItemGoneError):
+        await _client(hass).async_update_item(item)
+
+
+async def test_get_404_is_connection_error_not_gone(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A 404 on a GET usually means a wrong base URL, so it must NOT be swallowed as "gone".
+    aioclient_mock.get(f"{BASE}/api/shoppinglists", status=404)
+    with pytest.raises(NimblistConnectionError):
+        await _client(hass).async_get_lists()
+
+
 async def test_connection_error_wraps_transport_failure(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:

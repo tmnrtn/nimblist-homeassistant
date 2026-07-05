@@ -61,8 +61,13 @@ class NimblistApiClient:
             ) as resp:
                 if resp.status in (401, 403):
                     raise NimblistAuthError(f"Authentication failed ({resp.status}) for {method} {path}")
-                if resp.status == 409:
-                    raise NimblistItemGoneError(f"Item gone/conflicted (409) for {method} {path}")
+                # A write to a now-missing item is "gone", not a transport failure: the API returns
+                # 409 on a concurrent-modify and 404 on a concurrent-delete (ItemsController.DeleteItem
+                # / PutItem NotFound). Both mean the desired end-state is already reached, so the
+                # write handlers can treat them as an idempotent no-op (#1125). 404 is only "gone" for
+                # writes — on a GET it usually means a wrong base URL, which must surface as a failure.
+                if resp.status == 409 or (resp.status == 404 and method in ("PUT", "DELETE")):
+                    raise NimblistItemGoneError(f"Item gone/conflicted ({resp.status}) for {method} {path}")
                 if resp.status >= 400:
                     body = await resp.text()
                     raise NimblistConnectionError(
@@ -119,5 +124,9 @@ class NimblistApiClient:
         return await self._request("PUT", f"/api/items/{item_id}", json=body)
 
     async def async_delete_item(self, item_id: str) -> None:
-        """Delete an item (idempotent server-side)."""
+        """Delete an item.
+
+        Raises :class:`NimblistItemGoneError` if the item is already gone (HTTP 404/409);
+        callers treat that as an idempotent success.
+        """
         await self._request("DELETE", f"/api/items/{item_id}")

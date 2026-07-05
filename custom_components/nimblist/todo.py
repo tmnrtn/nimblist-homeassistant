@@ -11,12 +11,21 @@ from homeassistant.components.todo import (
     TodoListEntityFeature,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import NimblistConfigEntry
-from .api import NimblistItemGoneError
+from .api import NimblistAuthError, NimblistItemGoneError
 from .coordinator import NimblistDataUpdateCoordinator
+
+# Serialise write service calls so concurrent HA automations don't race each other's
+# add/update/delete against the same list (#1125).
+PARALLEL_UPDATES = 1
+
+# Nimblist's Item.Quantity is [MaxLength(50)]. HA maps a to-do item's description onto it, so
+# reject over-length input up front with a clear message instead of an opaque API 400 (#1125).
+_MAX_QUANTITY_LEN = 50
 
 
 async def async_setup_entry(
@@ -101,23 +110,44 @@ class NimblistTodoListEntity(
             for item in lst["items"].values()
         ]
 
+    def _reauth(self, err: NimblistAuthError) -> None:
+        """Turn a mid-write auth failure into a reauth prompt + user-visible error (#1125)."""
+        self.coordinator.config_entry.async_start_reauth(self.hass)
+        raise HomeAssistantError(
+            "Nimblist rejected the API token. Reconnect the integration with a new token."
+        ) from err
+
+    @staticmethod
+    def _validate_description(item: TodoItem) -> None:
+        """Reject an over-length description before it hits the 50-char quantity cap (#1125)."""
+        if item.description and len(item.description) > _MAX_QUANTITY_LEN:
+            raise HomeAssistantError(
+                f"Nimblist stores the description as the item quantity, capped at "
+                f"{_MAX_QUANTITY_LEN} characters."
+            )
+
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Add a new item to the list."""
-        await self.coordinator.client.async_add_item(
-            self.list_id,
-            item.summary or "",
-            quantity=item.description or None,
-            checked=item.status == TodoItemStatus.COMPLETED,
-        )
-        await self.coordinator.async_refresh()
+        self._validate_description(item)
+        try:
+            await self.coordinator.client.async_add_item(
+                self.list_id,
+                item.summary or "",
+                quantity=item.description or None,
+                checked=item.status == TodoItemStatus.COMPLETED,
+            )
+        except NimblistAuthError as err:
+            self._reauth(err)
+        await self.coordinator.async_request_refresh()
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update an item (rename / quantity / check-uncheck)."""
+        self._validate_description(item)
         lst = self._list
         current = lst["items"].get(item.uid) if lst else None
         if current is None:
             # Concurrently removed — just resync.
-            await self.coordinator.async_refresh()
+            await self.coordinator.async_request_refresh()
             return
 
         # Merge onto the full current item so the row-replacing PUT keeps fields HA didn't edit.
@@ -133,7 +163,9 @@ class NimblistTodoListEntity(
             await self.coordinator.client.async_update_item(merged)
         except NimblistItemGoneError:
             pass
-        await self.coordinator.async_refresh()
+        except NimblistAuthError as err:
+            self._reauth(err)
+        await self.coordinator.async_request_refresh()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete one or more items."""
@@ -142,4 +174,6 @@ class NimblistTodoListEntity(
                 await self.coordinator.client.async_delete_item(uid)
             except NimblistItemGoneError:
                 pass
-        await self.coordinator.async_refresh()
+            except NimblistAuthError as err:
+                self._reauth(err)
+        await self.coordinator.async_request_refresh()

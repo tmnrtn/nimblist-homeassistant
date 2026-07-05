@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to Nimblist",
-        "description": "Enter your Nimblist server URL and an API token. Create a token in the Nimblist web app under Settings → API tokens.",
+        "description": "Enter your Nimblist server URL (use https:// so your API token isn't sent in the clear) and an API token. Create a token in the Nimblist web app under Settings → API tokens.",
         "data": {
           "base_url": "Server URL",
           "api_token": "API token"
@@ -19,7 +19,9 @@
     },
     "error": {
       "cannot_connect": "Failed to connect to the Nimblist server.",
-      "invalid_auth": "Invalid or revoked API token."
+      "invalid_auth": "Invalid or revoked API token.",
+      "invalid_url": "Enter a valid server URL starting with http:// or https://.",
+      "insecure_url": "Use https:// — a plain http:// URL would send your API token in the clear. (http:// is only allowed for localhost.)"
     },
     "abort": {
       "already_configured": "This Nimblist account is already configured.",

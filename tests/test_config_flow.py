@@ -73,6 +73,66 @@ async def test_user_flow_cannot_connect(
     assert result["errors"] == {"base": "cannot_connect"}
 
 
+async def test_user_flow_rejects_malformed_url(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # No scheme → invalid; caught before any network call (#1126).
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: "nimblist.app", CONF_API_TOKEN: "nbl_x"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_url"}
+
+
+async def test_user_flow_rejects_http_non_loopback(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # Plain http to a remote host would send the token in the clear (#1126).
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: "http://nimblist.app", CONF_API_TOKEN: "nbl_x"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "insecure_url"}
+
+
+async def test_user_flow_allows_http_localhost(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A LAN/self-host over http://localhost is a legitimate Community-Edition config.
+    aioclient_mock.get(
+        "http://localhost:8080/api/auth/userinfo", json={"userId": "u1", "email": "a@b.c"}
+    )
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_BASE_URL: "http://localhost:8080", CONF_API_TOKEN: "nbl_good"},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_user_flow_cannot_connect_when_userinfo_lacks_userid(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A 200 that isn't a Nimblist userinfo payload must not crash on info["userId"] (#1125).
+    aioclient_mock.get(USERINFO_URL, json={"unexpected": True})
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_BASE_URL: BASE, CONF_API_TOKEN: "nbl_good"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
 async def test_user_flow_already_configured(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
 ) -> None:

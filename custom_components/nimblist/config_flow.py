@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
 from homeassistant.config_entries import (
@@ -27,6 +28,26 @@ from .const import (
 )
 
 
+# Hosts for which a plain-http Server URL is acceptable (a LAN self-host is a legitimate
+# Community-Edition config); anywhere else, http would send the API token in cleartext (#1126).
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]"}
+
+
+def _normalise_base_url(raw: str) -> tuple[str | None, str | None]:
+    """Validate + normalise the Server URL. Returns (url, None) or (None, error_code).
+
+    Rejects anything that isn't a well-formed http/https URL, and blocks ``http://`` for
+    non-loopback hosts so the ``X-Api-Key`` token can't be sent in cleartext (#1126).
+    """
+    base = (raw or "").strip().rstrip("/")
+    parsed = urlparse(base)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None, "invalid_url"
+    if parsed.scheme == "http" and parsed.hostname.lower() not in _LOOPBACK_HOSTS:
+        return None, "insecure_url"
+    return base, None
+
+
 async def _validate(hass, base_url: str, token: str) -> tuple[dict[str, Any] | None, str | None]:
     """Return (userinfo, None) on success or (None, error_code) on failure."""
     client = NimblistApiClient(base_url, token, async_get_clientsession(hass))
@@ -35,6 +56,10 @@ async def _validate(hass, base_url: str, token: str) -> tuple[dict[str, Any] | N
     except NimblistAuthError:
         return None, "invalid_auth"
     except NimblistConnectionError:
+        return None, "cannot_connect"
+    # A 200 without a userId (204, or a non-Nimblist server behind the URL) must not crash on
+    # info["userId"] later — surface it as a connection problem (#1125).
+    if not info or not info.get("userId"):
         return None, "cannot_connect"
     return info, None
 
@@ -50,18 +75,21 @@ class NimblistConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the initial step: server URL + API token."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            base_url = user_input[CONF_BASE_URL].rstrip("/")
-            token = user_input[CONF_API_TOKEN]
-            info, error = await _validate(self.hass, base_url, token)
-            if error:
-                errors["base"] = error
+            base_url, url_error = _normalise_base_url(user_input[CONF_BASE_URL])
+            if url_error:
+                errors["base"] = url_error
             else:
-                await self.async_set_unique_id(info["userId"])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=info.get("email") or "Nimblist",
-                    data={CONF_BASE_URL: base_url, CONF_API_TOKEN: token},
-                )
+                token = user_input[CONF_API_TOKEN]
+                info, error = await _validate(self.hass, base_url, token)
+                if error:
+                    errors["base"] = error
+                else:
+                    await self.async_set_unique_id(info["userId"])
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=info.get("email") or "Nimblist",
+                        data={CONF_BASE_URL: base_url, CONF_API_TOKEN: token},
+                    )
 
         schema = vol.Schema(
             {
