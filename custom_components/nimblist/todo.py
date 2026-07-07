@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import NimblistConfigEntry
-from .api import NimblistAuthError, NimblistItemGoneError
+from .api import NimblistAuthError, NimblistConnectionError, NimblistItemGoneError
 from .coordinator import NimblistDataUpdateCoordinator
 
 # Serialise write service calls so concurrent HA automations don't race each other's
@@ -26,6 +26,9 @@ PARALLEL_UPDATES = 1
 # Nimblist's Item.Quantity is [MaxLength(50)]. HA maps a to-do item's description onto it, so
 # reject over-length input up front with a clear message instead of an opaque API 400 (#1125).
 _MAX_QUANTITY_LEN = 50
+
+# Nimblist's Item.Name is [MaxLength(200)]; HA maps a to-do item's summary onto it (#1282).
+_MAX_SUMMARY_LEN = 200
 
 
 async def async_setup_entry(
@@ -126,8 +129,24 @@ class NimblistTodoListEntity(
                 f"{_MAX_QUANTITY_LEN} characters."
             )
 
+    @staticmethod
+    def _validate_summary(item: TodoItem) -> None:
+        """Reject an over-length name before it hits the 200-char Item.Name cap (#1282)."""
+        if item.summary and len(item.summary) > _MAX_SUMMARY_LEN:
+            raise HomeAssistantError(
+                f"Nimblist item names are capped at {_MAX_SUMMARY_LEN} characters."
+            )
+
+    @staticmethod
+    def _wrap_write(err: NimblistConnectionError) -> None:
+        """Surface a connection/API failure as a clean HA error instead of a raw traceback (#1282)."""
+        raise HomeAssistantError(
+            "Nimblist could not be reached. Please try again shortly."
+        ) from err
+
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Add a new item to the list."""
+        self._validate_summary(item)
         self._validate_description(item)
         try:
             await self.coordinator.client.async_add_item(
@@ -138,10 +157,13 @@ class NimblistTodoListEntity(
             )
         except NimblistAuthError as err:
             self._reauth(err)
+        except NimblistConnectionError as err:
+            self._wrap_write(err)
         await self.coordinator.async_request_refresh()
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
         """Update an item (rename / quantity / check-uncheck)."""
+        self._validate_summary(item)
         self._validate_description(item)
         lst = self._list
         current = lst["items"].get(item.uid) if lst else None
@@ -165,6 +187,8 @@ class NimblistTodoListEntity(
             pass
         except NimblistAuthError as err:
             self._reauth(err)
+        except NimblistConnectionError as err:
+            self._wrap_write(err)
         await self.coordinator.async_request_refresh()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
@@ -176,4 +200,6 @@ class NimblistTodoListEntity(
                 pass
             except NimblistAuthError as err:
                 self._reauth(err)
+            except NimblistConnectionError as err:
+                self._wrap_write(err)
         await self.coordinator.async_request_refresh()

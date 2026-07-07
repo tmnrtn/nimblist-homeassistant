@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -172,3 +174,35 @@ async def test_delete_swallows_missing_item(
     await hass.services.async_call(
         "todo", "remove_item", {ATTR_ENTITY_ID: ENTITY_ID, "item": "i2"}, blocking=True
     )
+
+
+async def test_add_item_wraps_connection_error(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A non-auth/non-gone API failure (500) must surface as a clean HomeAssistantError, not a raw
+    # NimblistConnectionError traceback (#1282).
+    await _setup(hass, aioclient_mock)
+    aioclient_mock.post(f"{BASE}/api/items", status=500)
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "todo", "add_item", {ATTR_ENTITY_ID: ENTITY_ID, "item": "Bread"}, blocking=True
+        )
+
+
+async def test_add_item_rejects_overlong_name(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # Item.Name is [MaxLength(200)] on the API; reject over-length up front instead of an opaque
+    # 400, and don't even hit the API (#1282).
+    await _setup(hass, aioclient_mock)
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            "todo",
+            "add_item",
+            {ATTR_ENTITY_ID: ENTITY_ID, "item": "x" * 201},
+            blocking=True,
+        )
+
+    assert not [c for c in aioclient_mock.mock_calls if c[0] == "POST"]
