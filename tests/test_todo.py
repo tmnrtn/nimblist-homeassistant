@@ -16,6 +16,7 @@ from custom_components.nimblist.const import CONF_API_TOKEN, CONF_BASE_URL, DOMA
 
 BASE = "https://nimblist.test"
 LISTS_URL = f"{BASE}/api/shoppinglists"
+PANTRY_URL = f"{BASE}/api/pantry"
 ENTITY_ID = "todo.groceries"
 
 
@@ -38,6 +39,7 @@ def _lists_payload() -> list[dict[str, Any]]:
 
 async def _setup(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker) -> MockConfigEntry:
     aioclient_mock.get(LISTS_URL, json=_lists_payload())
+    aioclient_mock.get(PANTRY_URL, json=[])
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="u1",
@@ -143,7 +145,7 @@ async def test_list_removal_removes_entity(
     # The next poll returns no lists → the entity should be removed.
     aioclient_mock.clear_requests()
     aioclient_mock.get(LISTS_URL, json=[])
-    await entry.runtime_data.async_refresh()
+    await entry.runtime_data.lists_coordinator.async_refresh()
     await hass.async_block_till_done()
 
     assert hass.states.get(ENTITY_ID) is None

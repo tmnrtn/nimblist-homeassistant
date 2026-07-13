@@ -20,10 +20,14 @@ from .api import NimblistApiClient, NimblistAuthError, NimblistConnectionError
 from .const import (
     CONF_API_TOKEN,
     CONF_BASE_URL,
+    CONF_EXPIRY_WINDOW_DAYS,
     CONF_SCAN_INTERVAL,
     DEFAULT_BASE_URL,
+    DEFAULT_EXPIRY_WINDOW_DAYS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    MAX_EXPIRY_WINDOW_DAYS,
+    MIN_EXPIRY_WINDOW_DAYS,
     MIN_SCAN_INTERVAL,
 )
 
@@ -143,15 +147,26 @@ class NimblistOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the update interval."""
+        """Manage the update interval and pantry expiry window."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        current_interval = self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+        current_window = self.config_entry.options.get(
+            CONF_EXPIRY_WINDOW_DAYS, DEFAULT_EXPIRY_WINDOW_DAYS
+        )
         schema = vol.Schema(
             {
-                vol.Optional(CONF_SCAN_INTERVAL, default=current): vol.All(
+                vol.Optional(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
                     vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL)
+                ),
+                vol.Optional(
+                    CONF_EXPIRY_WINDOW_DAYS, default=current_window
+                ): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=MIN_EXPIRY_WINDOW_DAYS, max=MAX_EXPIRY_WINDOW_DAYS),
                 ),
             }
         )

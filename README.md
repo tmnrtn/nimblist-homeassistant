@@ -12,8 +12,28 @@ and voice assistants (Assist / Alexa / Google via Home Assistant).
 - Each (non-template) Nimblist shopping list becomes its own `todo` entity.
 - **Add, rename, check/uncheck, and delete** items — synced straight to Nimblist.
 - Item quantity maps to the to-do item's description.
+- Your household **pantry** appears as a stock `todo` entity (`todo.pantry`) plus a
+  **"Pantry expiring soon"** `sensor` (see below).
 - Polls the Nimblist API (`cloud_polling`); the update interval is configurable.
 - Works against the hosted app **or a self-hosted instance** (the server URL is configurable).
+
+## Pantry
+
+Alongside your shopping lists, the integration exposes your household pantry:
+
+- **`todo.pantry`** — a stock-style entity for managing pantry items from Home Assistant.
+  Add, rename, update the quantity (free text, e.g. `1kg` / `2 packs` → the item
+  description), and remove items. Pantry items are *stock*, not a checklist, so they
+  don't get checked off. Each item's estimated use-by shows as the to-do item's `due` date.
+- **`sensor.pantry_expiring_soon`** — the count of pantry items whose estimated use-by
+  falls within a configurable window (default **7 days**; change it under *Configure*).
+  The individual items are exposed as the sensor's `items` attribute, which powers the
+  headline automation: *notify me when something nears its use-by.*
+
+> **Use-by dates are estimates, not food-safety advice.** `EstimatedUseBy` is derived
+> from when an item was added plus a typical storage time (from the embedded USDA
+> FoodKeeper dataset). Treat it as a rough planning aid — always use your own judgement
+> about whether food is safe to eat.
 
 ## Installation
 

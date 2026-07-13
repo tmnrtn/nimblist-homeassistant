@@ -146,3 +146,104 @@ async def test_unexpected_status_raises_connection_error(
     aioclient_mock.get(f"{BASE}/api/shoppinglists", status=500)
     with pytest.raises(NimblistConnectionError):
         await _client(hass).async_get_lists()
+
+
+# --- Pantry ---------------------------------------------------------------------------
+
+
+async def test_get_pantry_returns_payload(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    pantry = [{"id": "p1", "name": "Butter", "quantity": "1 pack", "estimatedUseBy": None}]
+    aioclient_mock.get(f"{BASE}/api/pantry", json=pantry)
+
+    assert await _client(hass).async_get_pantry() == pantry
+
+
+async def test_get_pantry_returns_empty_list_on_204(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    # A 204 (or a null body) must normalise to [] so the coordinator never iterates None.
+    aioclient_mock.get(f"{BASE}/api/pantry", status=204)
+    assert await _client(hass).async_get_pantry() == []
+
+
+async def test_add_pantry_item_posts_expected_body(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.post(f"{BASE}/api/pantry", json={"id": "p1"}, status=201)
+
+    await _client(hass).async_add_pantry_item("Butter", quantity="1 pack")
+
+    method, _, body, headers = aioclient_mock.mock_calls[-1]
+    assert method == "POST"
+    assert body == {"name": "Butter", "quantity": "1 pack"}
+    assert headers["X-Api-Key"] == TOKEN
+
+
+async def test_update_pantry_item_sends_only_name_and_quantity(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.put(f"{BASE}/api/pantry/p1", status=204)
+
+    # A full DTO with server-derived fields — only name + quantity must be sent.
+    item = {
+        "id": "p1",
+        "name": "Butter",
+        "quantity": "2 packs",
+        "categoryId": "c1",
+        "categoryName": "Dairy",
+        "estimatedUseBy": "2026-08-01T00:00:00Z",
+        "useBySource": "foodkeeper",
+    }
+    await _client(hass).async_update_pantry_item(item)
+
+    _, _, body, _ = aioclient_mock.mock_calls[-1]
+    assert body == {"name": "Butter", "quantity": "2 packs"}
+
+
+async def test_update_pantry_item_raises_gone_on_409(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.put(f"{BASE}/api/pantry/p1", status=409)
+    with pytest.raises(NimblistItemGoneError):
+        await _client(hass).async_update_pantry_item({"id": "p1", "name": "Butter"})
+
+
+async def test_update_pantry_item_raises_gone_on_404(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.put(f"{BASE}/api/pantry/p1", status=404)
+    with pytest.raises(NimblistItemGoneError):
+        await _client(hass).async_update_pantry_item({"id": "p1", "name": "Butter"})
+
+
+async def test_delete_pantry_item_succeeds_on_204(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.delete(f"{BASE}/api/pantry/p1", status=204)
+    await _client(hass).async_delete_pantry_item("p1")  # no exception
+
+
+async def test_delete_pantry_item_raises_gone_on_404(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.delete(f"{BASE}/api/pantry/p1", status=404)
+    with pytest.raises(NimblistItemGoneError):
+        await _client(hass).async_delete_pantry_item("p1")
+
+
+async def test_add_pantry_item_auth_error_on_401(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.post(f"{BASE}/api/pantry", status=401)
+    with pytest.raises(NimblistAuthError):
+        await _client(hass).async_add_pantry_item("Butter")
+
+
+async def test_get_pantry_500_raises_connection_error(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    aioclient_mock.get(f"{BASE}/api/pantry", status=500)
+    with pytest.raises(NimblistConnectionError):
+        await _client(hass).async_get_pantry()

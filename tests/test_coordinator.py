@@ -12,7 +12,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.nimblist.api import NimblistAuthError, NimblistConnectionError
 from custom_components.nimblist.const import CONF_API_TOKEN, CONF_BASE_URL, DOMAIN
-from custom_components.nimblist.coordinator import NimblistDataUpdateCoordinator
+from custom_components.nimblist.coordinator import (
+    NimblistDataUpdateCoordinator,
+    NimblistPantryCoordinator,
+)
 
 
 def _entry(hass: HomeAssistant) -> MockConfigEntry:
@@ -62,6 +65,46 @@ async def test_connection_error_raises_update_failed(hass: HomeAssistant) -> Non
     client = AsyncMock()
     client.async_get_lists.side_effect = NimblistConnectionError("down")
     coordinator = NimblistDataUpdateCoordinator(hass, _entry(hass), client)
+
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+
+
+# --- Pantry coordinator ---------------------------------------------------------------
+
+
+async def test_pantry_normalises_to_id_map(hass: HomeAssistant) -> None:
+    client = AsyncMock()
+    client.async_get_pantry.return_value = [
+        {"id": "p1", "name": "Butter", "quantity": "1 pack"},
+        {"id": "p2", "name": "Milk", "quantity": None},
+    ]
+    coordinator = NimblistPantryCoordinator(hass, _entry(hass), client)
+
+    data = await coordinator._async_update_data()
+
+    assert set(data) == {"p1", "p2"}
+    assert data["p1"]["name"] == "Butter"
+    assert data["p2"]["quantity"] is None
+
+
+async def test_pantry_auth_error_raises_config_entry_auth_failed(
+    hass: HomeAssistant,
+) -> None:
+    client = AsyncMock()
+    client.async_get_pantry.side_effect = NimblistAuthError("nope")
+    coordinator = NimblistPantryCoordinator(hass, _entry(hass), client)
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+
+
+async def test_pantry_connection_error_raises_update_failed(
+    hass: HomeAssistant,
+) -> None:
+    client = AsyncMock()
+    client.async_get_pantry.side_effect = NimblistConnectionError("down")
+    coordinator = NimblistPantryCoordinator(hass, _entry(hass), client)
 
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()

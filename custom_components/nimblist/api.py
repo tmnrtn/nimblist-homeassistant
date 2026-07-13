@@ -130,3 +130,38 @@ class NimblistApiClient:
         callers treat that as an idempotent success.
         """
         await self._request("DELETE", f"/api/items/{item_id}")
+
+    # --- Household pantry (free tier) -------------------------------------------------
+
+    async def async_get_pantry(self) -> list[dict[str, Any]]:
+        """Return every pantry item for the household (``PantryItemDto`` list)."""
+        return await self._request("GET", "/api/pantry") or []
+
+    async def async_add_pantry_item(
+        self, name: str, *, quantity: str | None = None
+    ) -> dict[str, Any] | None:
+        """Add a pantry item.
+
+        The API accepts only ``name`` (required) and free-text ``quantity``;
+        ``EstimatedUseBy`` is server-computed and read-only.
+        """
+        body = {"name": name, "quantity": quantity}
+        return await self._request("POST", "/api/pantry", json=body)
+
+    async def async_update_pantry_item(self, item: dict[str, Any]) -> dict[str, Any] | None:
+        """Update a pantry item.
+
+        ``PantryItemUpdateDto`` takes **only** ``name`` and ``quantity`` — everything
+        else (category, ``EstimatedUseBy``) is derived server-side, so we must not send it.
+        """
+        item_id = item["id"]
+        body = {"name": item["name"], "quantity": item.get("quantity")}
+        return await self._request("PUT", f"/api/pantry/{item_id}", json=body)
+
+    async def async_delete_pantry_item(self, item_id: str) -> None:
+        """Delete a pantry item.
+
+        Raises :class:`NimblistItemGoneError` if the item is already gone (HTTP 404/409);
+        callers treat that as an idempotent success.
+        """
+        await self._request("DELETE", f"/api/pantry/{item_id}")

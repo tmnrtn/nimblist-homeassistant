@@ -34,7 +34,11 @@
       "init": {
         "title": "Nimblist options",
         "data": {
-          "scan_interval": "Update interval (seconds)"
+          "scan_interval": "Update interval (seconds)",
+          "expiry_window_days": "Pantry \"expiring soon\" window (days)"
+        },
+        "data_description": {
+          "expiry_window_days": "The \"Pantry expiring soon\" sensor counts items whose estimated use-by falls within this many days. This is a storage-time estimate, not food-safety advice."
         }
       }
     }
